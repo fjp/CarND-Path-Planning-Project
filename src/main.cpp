@@ -168,7 +168,8 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
 int lane = 1;
 
 // Reference velocity
-double ref_vel = 49.5; // mph
+// Start at zero to avoid exceeding jerk error at the start
+double ref_vel = 0.0; // mph
 
 int main() {
     uWS::Hub h;
@@ -247,9 +248,65 @@ int main() {
                         // Store the size of the previous path to create a new transition
                         int prev_size = previous_path_x.size();
 
+                        
+                        // Sensor Fusion
+                        // Find other vehicle's in Frenet frame
+                        // Set the ego s coordinate to the s coordinate of the previous path
+                        if (prev_size > 0)
+                        {
+                            car_s = end_path_s;
+                        }
 
 
+                        bool too_close = false;
 
+                        // Go through sensor fusion list of vehicles around us
+                        // find ref_v to use
+                        for (int i = 0; i < sensor_fusion.size(); i++)
+                        {
+                            // check if the car is in my lane
+                            float d = sensor_fusion[i][6];
+                            if (d < (2+4*lane+2) && d > (2+4*lane-2))
+                            {
+                                // Because it is in my lane, check how close this car is
+                                double vx = sensor_fusion[i][3];
+                                double vy = sensor_fusion[i][4];
+                                double check_speed = sqrt(vx*vx + vy*vy);
+                                double check_car_s = sensor_fusion[i][5];
+
+                                
+                                // project the s value of the vehicle out into the future if previous trajectory points are used
+                                check_car_s += ((double)prev_size*.02*check_speed);
+                                // check if future s values greater than our car's future s value
+                                // car is in front of us and s gap is smaller than 30 m
+                                if ((check_car_s > car_s) && ((check_car_s - car_s) < 30))
+                                {
+                                    // Do some logic here, lower reference velocity so we don't crash into the car infront of us
+                                    // Or set flag to try to change lanes
+                                    //ref_vel = 29.5; // mph
+                                    too_close = true;
+                                    
+                                    // try to change lanes
+                                    if (lane > 0)
+                                    {
+                                        lane = 0;
+                                    }
+                                }
+                            }
+                        }
+
+                        
+                        if (too_close)
+                        {
+                            // deaccelerate with 5 m/s^2
+                            // (0.224 m/h * 2.24) m/s / 0.02 s = 5 m/s^2
+                            ref_vel -= .224;
+                        }
+                        else if (ref_vel < 49.5)
+                        {
+                            // accelerate with 5 m/s^2
+                            ref_vel += .224;
+                        }
 
 
 
@@ -270,6 +327,7 @@ int main() {
                         if (prev_size < 2)
                         {
                             // Use two points that make the path tangent to the car
+                            // Take the current car position car_x and go back using its yaw angle
                             double prev_car_x = car_x - cos(car_yaw);
                             double prev_car_y = car_y - sin(car_yaw);
 
@@ -314,7 +372,8 @@ int main() {
 
 
 
-
+                        // Transform to local car's coordinates.
+                        // Shift the last point of the previous path to the origin of the car and turn the path to get a zero degree angle
                         for (int i = 0; i < ptsx.size(); i++)
                         {
                             // Shift car reference angle to 0 degrees
