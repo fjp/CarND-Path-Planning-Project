@@ -9,6 +9,7 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "json.hpp"
 #include "spline.h"
+#include "classifier.h"
 
 using namespace std;
 
@@ -172,6 +173,44 @@ int lane = 1;
 double ref_vel = 0.0; // mph
 
 int main() {
+
+    // Prediction Gaussian Naive Bayes
+    GNB gnb = GNB();
+
+    vector< vector<double> > X_train = gnb.Load_State("../pred_data/train_states.txt");
+    vector< vector<double> > X_test  = gnb.Load_State("../pred_data/test_states.txt");
+    vector< string > Y_train  = gnb.Load_Label("../pred_data/train_labels.txt");
+    vector< string > Y_test   = gnb.Load_Label("../pred_data/test_labels.txt");
+
+    cout << "X_train number of elements " << X_train.size() << endl;
+    cout << "X_train element size " << X_train[0].size() << endl;
+    cout << "Y_train number of elements " << Y_train.size() << endl;
+
+    cout << "Training Gaussian Naive Bayes" << endl;
+    gnb.train(X_train, Y_train);
+    cout << "Training Gaussian Naive Bayes done" << endl;
+
+    cout << "X_test number of elements " << X_test.size() << endl;
+    cout << "X_test element size " << X_test[0].size() << endl;
+    cout << "Y_test number of elements " << Y_test.size() << endl;
+
+    cout << "Testing Gaussian Naive Bayes" << endl;
+    int score = 0;
+    for(int i = 0; i < X_test.size(); i++)
+    {
+        vector<double> coords = X_test[i];
+        string predicted = gnb.predict(coords);
+        if(predicted.compare(Y_test[i]) == 0)
+        {
+            score += 1;
+        }
+    }
+
+    float fraction_correct = float(score) / Y_test.size();
+    cout << "Testing Gaussian Naive Bayes done: " << (100*fraction_correct) << " correct" << endl;
+
+
+    // Simulator code
     uWS::Hub h;
 
     // Load up map values for waypoint's x,y,s and d normalized normal vectors
@@ -248,7 +287,7 @@ int main() {
                         // Store the size of the previous path to create a new transition
                         int prev_size = previous_path_x.size();
 
-                        
+
                         // Sensor Fusion
                         // Find other vehicle's in Frenet frame
                         // Set the ego s coordinate to the s coordinate of the previous path
@@ -274,7 +313,7 @@ int main() {
                                 double check_speed = sqrt(vx*vx + vy*vy);
                                 double check_car_s = sensor_fusion[i][5];
 
-                                
+
                                 // project the s value of the vehicle out into the future if previous trajectory points are used
                                 check_car_s += ((double)prev_size*.02*check_speed);
                                 // check if future s values greater than our car's future s value
@@ -285,7 +324,7 @@ int main() {
                                     // Or set flag to try to change lanes
                                     //ref_vel = 29.5; // mph
                                     too_close = true;
-                                    
+
                                     // try to change lanes
                                     if (lane > 0)
                                     {
@@ -295,7 +334,7 @@ int main() {
                             }
                         }
 
-                        
+
                         if (too_close)
                         {
                             // deaccelerate with 5 m/s^2
@@ -350,7 +389,7 @@ int main() {
                             // Use two points that make the path tangent to the previous path's end point
                             ptsx.push_back(ref_x_prev);
                             ptsx.push_back(ref_x);
- 
+
                             ptsy.push_back(ref_y_prev);
                             ptsy.push_back(ref_y);
                         }
@@ -360,12 +399,12 @@ int main() {
                         vector<double> next_wp0 = getXY(car_s+30, (2+4*lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
                         vector<double> next_wp1 = getXY(car_s+60, (2+4*lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
                         vector<double> next_wp2 = getXY(car_s+90, (2+4*lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
-                        
+
                         ptsx.push_back(next_wp0[0]);
                         ptsx.push_back(next_wp1[0]);
                         ptsx.push_back(next_wp2[0]);
 
-                        
+
                         ptsy.push_back(next_wp0[1]);
                         ptsy.push_back(next_wp1[1]);
                         ptsy.push_back(next_wp2[1]);
