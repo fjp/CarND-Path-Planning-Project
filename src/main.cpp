@@ -10,6 +10,7 @@
 #include "json.hpp"
 #include "spline.h"
 #include "classifier.h"
+#include "vehicle.h"
 
 using namespace std;
 
@@ -40,10 +41,11 @@ double distance(double x1, double y1, double x2, double y2)
 {
     return sqrt((x2-x1)*(x2-x1)+(y2-y1)*(y2-y1));
 }
-int ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vector<double> &maps_y)
+int ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vector<double> &maps_y, int *closest2ndWaypoint = 0)
 {
 
     double closestLen = 100000; //large number
+    double closest2ndLen = 1000000;
     int closestWaypoint = 0;
 
     for(int i = 0; i < maps_x.size(); i++)
@@ -55,6 +57,11 @@ int ClosestWaypoint(double x, double y, const vector<double> &maps_x, const vect
         {
             closestLen = dist;
             closestWaypoint = i;
+        }
+        if (dist < closest2ndLen && closest2ndLen > closestLen)
+        {
+            closest2ndLen = dist;
+            *closest2ndWaypoint = i;
         }
 
     }
@@ -162,8 +169,8 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s, const vec
     double y = seg_y + d*sin(perp_heading);
 
     return {x,y};
-
 }
+
 
 // start in lane 1
 int lane = 1;
@@ -171,6 +178,16 @@ int lane = 1;
 // Reference velocity
 // Start at zero to avoid exceeding jerk error at the start
 double ref_vel = 0.0; // mph
+
+// Safety distance to other vehicles
+double safetyGap = 30; // m
+
+
+double SPEED_LIMIT = 49.9;
+int num_lanes = 3;
+double goal_s = 6945.554;
+int goal_lane = 1;
+double MAX_ACCEL = 10; //m/s^2
 
 int main() {
 
@@ -206,9 +223,17 @@ int main() {
         }
     }
 
-    float fraction_correct = float(score) / Y_test.size();
+    double fraction_correct = double(score) / Y_test.size();
     cout << "Testing Gaussian Naive Bayes done: " << (100*fraction_correct) << " correct" << endl;
 
+
+	//vector<int> ego_config = {SPEED_LIMIT, num_lanes, goal_s, goal_lane, MAX_ACCEL};
+
+    //Vehicle(int lane, double s, double v, double a, string state="CS");
+    Vehicle ego = Vehicle(lane, 6945.554, 0.0, 0);
+
+    ego.configure(SPEED_LIMIT, num_lanes, goal_s, goal_lane, MAX_ACCEL);
+    ego.state = "KL";
 
     // Simulator code
     uWS::Hub h;
@@ -232,9 +257,9 @@ int main() {
         istringstream iss(line);
         double x;
         double y;
-        float s;
-        float d_x;
-        float d_y;
+        double s;
+        double d_x;
+        double d_y;
         iss >> x;
         iss >> y;
         iss >> s;
@@ -247,7 +272,7 @@ int main() {
         map_waypoints_dy.push_back(d_y);
     }
 
-    h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+    h.onMessage([&map_waypoints_x,&map_waypoints_y,&map_waypoints_s,&map_waypoints_dx,&map_waypoints_dy,&ego](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
         uWS::OpCode opCode) {
             // "42" at the start of the message means there's a websocket message event.
             // The 4 signifies a websocket message
@@ -296,29 +321,84 @@ int main() {
                             car_s = end_path_s;
                         }
 
-
                         bool too_close = false;
+
+
+                        // Map sourrounding vehicles with their corresponding object id
+                        map<int, Vehicle> vehicles;
+                        // Predicted trajectories of surrounding objects (other vehicles)
+                        // Object id, predicted trajectory of this vehicle with object id
+                        map<int, vector<Vehicle> > predictions;
 
                         // Go through sensor fusion list of vehicles around us
                         // find ref_v to use
                         for (int i = 0; i < sensor_fusion.size(); i++)
                         {
+                            // Frenet d coordinate of the current vehicle
+                            double object_s = sensor_fusion[i][5];
+                            // Only consider surrounding vehicles that are close to us
+                            if (fabs(object_s - car_s) > safetyGap)
+                            {
+                                continue;
+                            }
+                            // Frenet d coordinate of the current vehicle
+                            double object_d = sensor_fusion[i][6];
+
+                            int object_id = sensor_fusion[i][0];
+                            double object_x = sensor_fusion[i][1];
+                            double object_y = sensor_fusion[i][2];
+                            double object_vx = sensor_fusion[i][3];
+                            double object_vy = sensor_fusion[i][4];
+                            double object_v_abs = sqrt(object_vx*object_vx + object_vy*object_vy);
+
+
+                            int closest2ndWaypoint = 0;
+                            int closestWaypoint = ClosestWaypoint(object_x, object_y, map_waypoints_x, map_waypoints_y, &closest2ndWaypoint);
+
+
+                            double waypoint0_x = map_waypoints_x[closestWaypoint];
+                            double waypoint1_x = map_waypoints_x[closest2ndWaypoint];
+                            double waypoint0_y = map_waypoints_y[closestWaypoint];
+                            double waypoint1_y = map_waypoints_y[closest2ndWaypoint];
+
+                            // Calculate its velocity in s and d direction
+                            // https://discussions.udacity.com/t/compute-s-speed-of-sensor-fusion-data/326620
+                            double object_heading  = atan2(object_vy, object_vx);
+                            double lane_heading = atan2((waypoint1_y - waypoint0_y), (waypoint1_x - waypoint0_x));
+                            double delta_theta = object_heading - lane_heading;
+
+
+                            double object_v_s = object_v_abs * cos(delta_theta);
+                            double object_v_d = object_v_abs * sin(delta_theta);
+
+                            // Assume a constant acceleration of the vehicle nearby
+                            double object_a = 0;
+                            // Associate the vehicle to a lane -> 0, 1, 2
+                            int object_lane = object_d / 4;
+                            // Create the vehicle object
+                            Vehicle object = Vehicle(object_lane, object_s, object_v_abs, object_a, "CS");
+                            std::cout << "Vehicle with ID: " << object_id << " is in lane: " << object_lane << " driving: " << object_v_abs << " mph" << " with state: " << object.state << std::endl;
+                            // Add the vehicle to the vehicles map
+                            vehicles.insert(std::pair<int,Vehicle>(object_id, object));
+                            //std::cout << "Added vehicle with ID: " << object_id << std::endl;
+
+                            // Predict the trajectory of the surrounding vehicle and store it for later use
+                            vector<Vehicle> preds = object.generate_predictions();
+                            predictions[object_id] = preds;
+
                             // check if the car is in my lane
-                            float d = sensor_fusion[i][6];
-                            if (d < (2+4*lane+2) && d > (2+4*lane-2))
+                            if (object_d < (2+4*lane+2) && object_d > (2+4*lane-2))
                             {
                                 // Because it is in my lane, check how close this car is
-                                double vx = sensor_fusion[i][3];
-                                double vy = sensor_fusion[i][4];
-                                double check_speed = sqrt(vx*vx + vy*vy);
-                                double check_car_s = sensor_fusion[i][5];
+
+
 
 
                                 // project the s value of the vehicle out into the future if previous trajectory points are used
-                                check_car_s += ((double)prev_size*.02*check_speed);
+                                object_s += ((double)prev_size*.02*object_v_abs);
                                 // check if future s values greater than our car's future s value
                                 // car is in front of us and s gap is smaller than 30 m
-                                if ((check_car_s > car_s) && ((check_car_s - car_s) < 30))
+                                if ((object_s > car_s) && ((object_s - car_s) < safetyGap))
                                 {
                                     // Do some logic here, lower reference velocity so we don't crash into the car infront of us
                                     // Or set flag to try to change lanes
@@ -332,8 +412,17 @@ int main() {
                                     }
                                 }
                             }
+                            else if (1)
+                            {
+
+                            }
+                            else if (1)
+                            {
+
+                            }
                         }
 
+                        std::cout << "Number of surrounding vehicles: " << vehicles.size() << std::endl;
 
                         if (too_close)
                         {
@@ -346,6 +435,13 @@ int main() {
                             // accelerate with 5 m/s^2
                             ref_vel += .224;
                         }
+
+
+                        vector<Vehicle> trajectory = ego.choose_next_state(predictions);
+                        std::cout << "============================================" << std::endl;
+                        std::cout << "Next ego state: " << ego.state << std::endl;
+        	            //it->second.realize_next_state(trajectory);
+                        std::cout << "============================================" << std::endl;
 
 
 
@@ -485,54 +581,6 @@ int main() {
 
                         // TODO: define a path made up of (x,y) points that the car will visit sequentially every .02 seconds
 
-                        // double pos_x;
-                        // double pos_y;
-                        // double angle;
-                        // int path_size = previous_path_x.size();
-                        //
-                        // for(int i = 0; i < path_size; i++)
-                        // {
-                        //     next_x_vals.push_back(previous_path_x[i]);
-                        //     next_y_vals.push_back(previous_path_y[i]);
-                        // }
-                        //
-                        // if(path_size == 0)
-                        // {
-                        //     pos_x = car_x;
-                        //     pos_y = car_y;
-                        //     angle = deg2rad(car_yaw);
-                        // }
-                        // else
-                        // {
-                        //     pos_x = previous_path_x[path_size-1];
-                        //     pos_y = previous_path_y[path_size-1];
-                        //
-                        //     double pos_x2 = previous_path_x[path_size-2];
-                        //     double pos_y2 = previous_path_y[path_size-2];
-                        //     angle = atan2(pos_y-pos_y2,pos_x-pos_x2);
-                        // }
-
-                        /*
-                        double dist_inc = 0.5;
-                        //for(int i = 0; i < 50-path_size; i++)
-                        for(int i = 0; i < 50; i++)
-                        {
-                            // Define the next frenet coordinates of the vehicle
-                            double next_s = car_s+(i+1)*dist_inc;
-                            double next_d = car_d;
-
-                            // Transform the next frenet coordinates to map coordinates
-                            vector<double> xy = getXY(next_s, next_d, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-
-                            next_x_vals.push_back(xy[0]);
-                            next_y_vals.push_back(xy[1]);
-                            //next_x_vals.push_back(pos_x+(dist_inc)*cos(angle+(i+1)*(pi()/100)));
-                            //next_y_vals.push_back(pos_y+(dist_inc)*sin(angle+(i+1)*(pi()/100)));
-                            //pos_x += (dist_inc)*cos(angle+(i+1)*(pi()/100));
-                            //pos_y += (dist_inc)*sin(angle+(i+1)*(pi()/100));
-                        }
-
-                        */
 
                         msgJson["next_x"] = next_x_vals;
                         msgJson["next_y"] = next_y_vals;

@@ -65,9 +65,9 @@ void GNB::train(vector<vector<double>> data, vector<string> labels)
 	//These will be used later to provide distributions for conditional probabilites.
 	//Means are stored in an ArrayXd of size 4.
 
-	float left_size = 0;
-	float keep_size = 0;
-	float right_size = 0;
+	double left_size = 0;
+	double keep_size = 0;
+	double right_size = 0;
 
     //For each label, compute the numerators of the means for each class
     //and the total number of data points given with that label.
