@@ -182,6 +182,8 @@ double ref_vel = 0.0; // mph
 // Safety distance to other vehicles
 double safetyGap = 30; // m
 
+double dt = 0.02;
+
 
 double SPEED_LIMIT = 49.9;
 int num_lanes = 3;
@@ -322,13 +324,13 @@ int main() {
                         }
 
                         bool too_close = false;
-
+                        int horizon;
 
                         // Map sourrounding vehicles with their corresponding object id
                         map<int, Vehicle> vehicles;
                         // Predicted trajectories of surrounding objects (other vehicles)
                         // Object id, predicted trajectory of this vehicle with object id
-                        map<int, vector<Vehicle> > predictions;
+                        map<int, vector<Vehicle> > predictions = {};
 
                         // Go through sensor fusion list of vehicles around us
                         // find ref_v to use
@@ -383,7 +385,8 @@ int main() {
                             //std::cout << "Added vehicle with ID: " << object_id << std::endl;
 
                             // Predict the trajectory of the surrounding vehicle and store it for later use
-                            vector<Vehicle> preds = object.generate_predictions();
+                            horizon = 2/dt;
+                            vector<Vehicle> preds = object.generate_predictions(horizon);
                             predictions[object_id] = preds;
 
                             // check if the car is in my lane
@@ -408,7 +411,8 @@ int main() {
                                     // try to change lanes
                                     if (lane > 0)
                                     {
-                                        lane = 0;
+                                        //lane = 0;
+                                        //ego.lane = 0;
                                     }
                                 }
                             }
@@ -435,9 +439,24 @@ int main() {
                             // accelerate with 5 m/s^2
                             ref_vel += .224;
                         }
+                        ego.update_state(ego.state, lane, car_s, ref_vel, 0);
 
 
-                        vector<Vehicle> trajectory = ego.choose_next_state(predictions);
+                        if (ego.state.compare("PLCL") == 0)
+                        {
+                            ego.state = "LCL";
+                            lane--;
+                            ego.update_state(ego.state, lane, car_s, ref_vel, 0);
+                        }
+                        else if(ego.state.compare("PLCR") == 0)
+                        {
+                            ego.state = "LCR";
+                            lane++;
+                            ego.update_state(ego.state, lane, car_s, ref_vel, 0);
+                        }
+
+
+                        vector<Vehicle> trajectory = ego.choose_next_state(predictions, horizon);
                         std::cout << "============================================" << std::endl;
                         std::cout << "Next ego state: " << ego.state << std::endl;
         	            //it->second.realize_next_state(trajectory);

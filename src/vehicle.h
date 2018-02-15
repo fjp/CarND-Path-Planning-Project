@@ -20,9 +20,7 @@ public:
 
   };
 
-  int L = 1;
-
-  int preferred_buffer = 6; // impacts "keep lane" behavior.
+  int preferred_buffer = 6; // impacts "keep ane" behavior.
 
   int lane;
 
@@ -66,7 +64,7 @@ public:
     OUTPUT: The best (lowest cost) trajectory corresponding to the next ego vehicle state.
 
     */
-  vector<Vehicle> choose_next_state(map<int, vector<Vehicle>> predictions);
+  vector<Vehicle> choose_next_state(map<int, vector<Vehicle>> predictions, int horizon);
 
   /*
     Provides the possible next states given the current state for the FSM
@@ -78,7 +76,7 @@ public:
   /*
     Given a possible next state, generate the appropriate trajectory to realize the next state.
     */
-  vector<Vehicle> generate_trajectory(string state, map<int, vector<Vehicle>> predictions);
+  vector<Vehicle> generate_trajectory(string state, map<int, vector<Vehicle>> predictions, int horizon);
 
   /*
     Gets next timestep kinematics (position, velocity, acceleration)
@@ -95,7 +93,7 @@ public:
   /*
     Generate a keep lane trajectory.
     */
-  vector<Vehicle> keep_lane_trajectory(map<int, vector<Vehicle>> predictions);
+  vector<Vehicle> keep_lane_trajectory(map<int, vector<Vehicle>> predictions, int horizon);
 
   /*
     Generate a trajectory preparing for a lane change.
@@ -127,6 +125,8 @@ public:
 
   // TODO not needed
   void realize_next_state(vector<Vehicle> trajectory);
+
+  void update_state(string state, int lane, double s, double v, double a);
 
   /*
   Called by simulator before simulation begins. Sets various
