@@ -299,7 +299,7 @@ int main() {
                         double car_s = j[1]["s"];
                         double car_d = j[1]["d"];
                         double car_yaw = j[1]["yaw"];
-                        double car_speed = j[1]["speed"];
+                        double car_v = j[1]["speed"];
 
                         // Previous path data given to the Planner
                         auto previous_path_x = j[1]["previous_path_x"];
@@ -385,7 +385,7 @@ int main() {
                             //std::cout << "Added vehicle with ID: " << object_id << std::endl;
 
                             // Predict the trajectory of the surrounding vehicle and store it for later use
-                            horizon = 2/dt;
+                            horizon = 3/dt;
                             vector<Vehicle> preds = object.generate_predictions(horizon);
                             predictions[object_id] = preds;
 
@@ -393,10 +393,6 @@ int main() {
                             if (object_d < (2+4*lane+2) && object_d > (2+4*lane-2))
                             {
                                 // Because it is in my lane, check how close this car is
-
-
-
-
                                 // project the s value of the vehicle out into the future if previous trajectory points are used
                                 object_s += ((double)prev_size*.02*object_v_abs);
                                 // check if future s values greater than our car's future s value
@@ -407,22 +403,7 @@ int main() {
                                     // Or set flag to try to change lanes
                                     //ref_vel = 29.5; // mph
                                     too_close = true;
-
-                                    // try to change lanes
-                                    if (lane > 0)
-                                    {
-                                        //lane = 0;
-                                        //ego.lane = 0;
-                                    }
                                 }
-                            }
-                            else if (1)
-                            {
-
-                            }
-                            else if (1)
-                            {
-
                             }
                         }
 
@@ -439,7 +420,7 @@ int main() {
                             // accelerate with 5 m/s^2
                             ref_vel += .224;
                         }
-                        ego.update_state(ego.state, lane, car_s, ref_vel, 0);
+                        ego.update_state(ego.state, lane, car_s, car_v, 0);
 
 
                         if (ego.state.compare("PLCL") == 0)

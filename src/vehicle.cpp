@@ -57,9 +57,10 @@ vector<Vehicle> Vehicle::choose_next_state(map<int, vector<Vehicle>> predictions
 
     vector<double>::iterator best_cost = min_element(begin(costs), end(costs));
     int best_idx = distance(begin(costs), best_cost);
-    //std::cout << "Best next state is: " << final_states[best_idx] << std::endl;
+    std::cout << "Updated ego state from: " << this->state;
     // update best state
     this->state = final_states[best_idx];
+    std::cout << " to: " << final_states[best_idx] << std::endl;
     return final_trajectories[best_idx];
 }
 
@@ -73,8 +74,12 @@ vector<string> Vehicle::successor_states() {
     states.push_back("KL");
     string state = this->state;
     if(state.compare("KL") == 0) {
-        states.push_back("PLCL");
-        states.push_back("PLCR");
+        if (lane != 0) {
+            states.push_back("PLCL");
+        }
+        if (lane != lanes_available - 1) {
+            states.push_back("PLCR");
+        }
     } else if (state.compare("PLCR") == 0) {
         if (lane != lanes_available - 1) {
             states.push_back("PLCR");
