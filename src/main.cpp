@@ -437,7 +437,7 @@ int main() {
                         }
 
 
-                        vector<Vehicle> trajectory = ego.choose_next_state(predictions, horizon);
+                        ego.choose_next_state(predictions, horizon);
                         std::cout << "============================================" << std::endl;
                         std::cout << "Next ego state: " << ego.state << std::endl;
         	            //it->second.realize_next_state(trajectory);

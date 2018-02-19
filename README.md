@@ -1,6 +1,89 @@
+# Self-Driving Car Engineer Nanodegree Program
+
+# Path Planning Project
+
+Check the result of the Udacity path planning project at:
+https://www.youtube.com/watch?v=-Kz0_4cFdbg&feature=youtu.be
+
+
+## Introduction
+
+The goal of this project is to navigate a car around a simulated highway scenario, including traffic and given waypoint, telemetry, and sensor fusion data. The car must not violate a set of motion constraints:
+
+- The car drives according to the speed limit.
+    - The car doesn't drive faster than the speed limit. Also the car isn't driving much slower than speed limit unless obstructed by traffic.
+- Max Acceleration and Jerk are not Exceeded.
+    - The car does not exceed a total acceleration of 10 m/s^2 and a jerk of 10 m/s^3.
+- Car does not have collisions.
+    - The car must not come into contact with any of the other cars on the road.
+- The car stays in its lane, except for the time between changing lanes.
+    - The car doesn't spend more than a 3 second length out side the lane lanes during changing lanes, and every other time the car stays inside one of the 3 lanes on the right hand side of the road.
+- The car is able to change lanes.
+    - The car is able to smoothly change lanes when it makes sense to do so, such as when behind a slower moving car and an adjacent lane is clear of other traffic.
+
+This implementation is summarized in the following four steps:
+
+1 Determine ego car parameters and construct vehicle object
+2 Generate predictions of other vehicles from sensor fusion data
+3 Determine the best successor state
+4 Produce new path for the best state
+
+
+## Implementation
+
+### 1. Determine Ego Car Parameters and Construct Vehicle Object
+
+The simulator returns the data of the ego vehicle and sourrounding traffic objects. Furthermore, the previously driven trajectory is returned, which is
+used to create a smooth path by including two trajectory points from the previous trajectory for the new trajectory. After these first two start states,
+three points, which are spaced 30 meters, are planned along the road using frenet s and d coordinates. To obtain jerk minimizing trajectory,
+all five points are interpolated using the recommended `spline.h` library.
+
+The vehicle state and its associated (self-explanatory) methods are contained in the Vehicle class. The states ("Keep lane", "Prepare lane change left/right", "lane
+change left/right") and methods are used for the ego and sourrounding vehicles. These methods include update_states, generate_trajectory
+(for example: keep_lane_trajectory, lane_change_trajectory, prep_lane_change_trajectory), and are used to plan trajectories which check for collisions with
+other vehicles using predictions from the sensor fusion data. An empty trajectory is returend, if a collision is not avoidable.
+
+### 2. Generate Predictions from Sensor Fusion Data
+The sensor fusion data received from the simulator in each iteration is parsed and trajectories for each of the other cars on the road are generated. These trajectories match the duration and interval of the ego car's trajectories generated for each available state and are used in conjunction with a set of cost functions to determine a best trajectory for the ego car. A sample of these predicted trajectories (along with the ego car's predicted trajectory) is shown below.
+
+
+### 3. Determine Best Next State
+Using the ego car state, sensor fusion predictions, and Vehicle class methods mentioned above, an optimal next trajectory is produced which leads to a new state
+("KL", "LCL", "LCR"). Each trajectory is evaluated according to a set of cost functions, and the trajectory with the lowest cost is selected. In the current implementation, these cost functions include:
+
+- Cost increases based on distance of intended lane (for planning a lane change) and final lane of trajectory.
+- Cost becomes higher for trajectories with intended lane and final lane that have traffic slower than vehicle's target speed.
+- It is assumed that all non ego vehicles in a lane have the same speed, so to get the speed limit for a lane, we can just find one vehicle in that lane.
+
+All the cost functions are summed using weights to get a total cost for a trajectory.
+
+Each available state is given a target Frenet state by changing the lane state of the ego vehicle and generating new positions in s direction.
+A spline is used to interpolate the intermediate points, which results in a smooth trajectory.
+
+### 4. Produce New Trajectory
+The new path starts with a certain number of points from the previous path, which is received from the simulator at each iteration. From there a spline is generated beginning with the last two points of the previous path that have been kept (or the current position, heading, and velocity if no current path exists), and ending with three points 30 and 60 meters ahead and in the target lane. This produces a smooth x and y trajectory. To prevent excessive acceleration and jerk, the velocity is only allowed increment or decrement by a small amount, and the corresponding next x and y points are calculated along the x and y splines created earlier.
+
+## Conclusion
+The resulting path planner works, but not perfectly. It is able to drive more than 5 miles without incident. Most problems were observed with leading vehicles
+that change lanes instantly. Another area which requires improvement is lane changes over two lanes.
+Somtimes, such lane changes resulted in violating the maximum allowed acceleration. Therefore, instead of a using a spline, a jerk minimizing trajectory should be used
+and a cost function to penalize high accelerations. For a better debugging experience and to improve the planner, the traffic situations need to be
+repeatable and the simulation shoudl stop while stopping at a break point.
+
+
+![Simulator](pathplanning.png)
+
+
+The top right screen of the simulator shows the current/best miles driven without incident. Incidents include exceeding acceleration/jerk/speed, collision, and driving outside of the lanes. Each incident case is also listed below in more detail.
+
+
+the description below is Udacity's original README for the project repo
+
+==========================
+
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
-   
+
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases).
 
@@ -38,13 +121,13 @@ Here is the data provided from the Simulator to the C++ Program
 #### Previous path data given to the Planner
 
 //Note: Return the previous list but with processed points removed, can be a nice tool to show how far along
-the path has processed since last time. 
+the path has processed since last time.
 
 ["previous_path_x"] The previous list of x points previously given to the simulator
 
 ["previous_path_y"] The previous list of y points previously given to the simulator
 
-#### Previous path's end s and d values 
+#### Previous path's end s and d values
 
 ["end_path_s"] The previous list's last point's frenet s value
 
@@ -52,7 +135,7 @@ the path has processed since last time.
 
 #### Sensor Fusion Data, a list of all other car's attributes on the same side of the road. (No Noise)
 
-["sensor_fusion"] A 2d vector of cars and then that car's [car's unique ID, car's x position in map coordinates, car's y position in map coordinates, car's x velocity in m/s, car's y velocity in m/s, car's s position in frenet coordinates, car's d position in frenet coordinates. 
+["sensor_fusion"] A 2d vector of cars and then that car's [car's unique ID, car's x position in map coordinates, car's y position in map coordinates, car's x velocity in m/s, car's y velocity in m/s, car's s position in frenet coordinates, car's d position in frenet coordinates.
 
 ## Details
 
@@ -82,7 +165,7 @@ A really helpful resource for doing this project and creating smooth trajectorie
   * Run either `install-mac.sh` or `install-ubuntu.sh`.
   * If you install from source, checkout to commit `e94b6e1`, i.e.
     ```
-    git clone https://github.com/uWebSockets/uWebSockets 
+    git clone https://github.com/uWebSockets/uWebSockets
     cd uWebSockets
     git checkout e94b6e1
     ```
@@ -137,4 +220,3 @@ still be compilable with cmake and make./
 
 ## How to write a README
 A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-

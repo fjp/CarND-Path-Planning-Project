@@ -176,6 +176,7 @@ vector<Vehicle> Vehicle::prep_lane_change_trajectory(string state, map<int, vect
     double new_a;
     Vehicle vehicle_behind;
     int new_lane = this->lane + lane_direction[state];
+    std::cout << "Preparing lane change to lane " << new_lane << std::endl;
     vector<Vehicle> trajectory = {Vehicle(this->lane, this->s, this->v, this->a, this->state)};
     vector<double> curr_lane_new_kinematics = get_kinematics(predictions, this->lane);
 
