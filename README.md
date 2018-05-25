@@ -66,9 +66,9 @@ The new path starts with a certain number of points from the previous path, whic
 ## Conclusion
 The resulting path planner works, but not perfectly. It is able to drive more than 5 miles without incident. Most problems were observed with leading vehicles
 that change lanes instantly. Another area which requires improvement is lane changes over two lanes.
-Somtimes, such lane changes resulted in violating the maximum allowed acceleration. Therefore, instead of a using a spline, a jerk minimizing trajectory should be used
+Sometimes, such lane changes resulted in violating the maximum allowed acceleration. Therefore, instead of a using a spline, a jerk minimizing trajectory should be used
 and a cost function to penalize high accelerations. For a better debugging experience and to improve the planner, the traffic situations need to be
-repeatable and the simulation shoudl stop while stopping at a break point.
+repeatable and the simulation should stop while stopping at a break point.
 
 
 ![Simulator](pathplanning.png)
